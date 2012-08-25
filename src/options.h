@@ -27,6 +27,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef OPTIONS_H
 #define OPTIONS_H
 
+/* As of May 2012, HRABAK cut out ALL the gib_style stuff and replaced it
+ * with an array of feh_style structs  inside __fehoptions.
+ * See feh.h for struct feh_style.
+ */
+
 struct __fehoptions {
 	unsigned char multiwindow;
 	unsigned char montage;
@@ -72,6 +77,7 @@ struct __fehoptions {
 	unsigned char text_bg;
 	unsigned char image_bg;
 	unsigned char no_fehbg;
+	unsigned char write_filelist;         /* OK? to write filelist at exit */
 
 	char *output_file;
 	char *output_dir;
@@ -86,10 +92,13 @@ struct __fehoptions {
 	char *menu_font;
 	char *customlist;
 	char *menu_bg;
+	char *menu_style;
 	char *caption_path;
 	char *start_list_at;
 	char *info_cmd;
 	char *index_info;
+
+  feh_style style[STYLE_CNT];
 
 	int force_aliasing;
 	int thumb_w;

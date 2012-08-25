@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #include "feh.h"
+#include "feh_ll.h"
 #include "filelist.h"
 #include "options.h"
 
@@ -36,12 +37,64 @@ static void feh_parse_options_from_string(char *opts);
 static void feh_load_options_for_theme(char *theme);
 static void show_usage(void);
 static void show_version(void);
+void init_all_styles( feh_style (*s)[] );
 static char *theme;
 
 fehoptions opt;
+/*  extern LLMD *ofi_md;        replaces the old original_file_items */
+
+void init_all_styles( feh_style (*s)[] ){
+    /* loads the set of default sytle settings used in feh.
+     * Historically, menu and caption styles were only two, but
+     * HRABAK added several more to encapsulate the five diff ways
+     * that feh called the feh_imlib_text_draw() function.
+     * See the style[] array stored inside fehoptions.
+     * See the style_type enum in structs.h.  That enum  IS the index to
+     * this styles array, so DON'T screw up the order.
+     * This internal order matches the external menu.style file like ...
+     * #Style
+     * #NAME Menu
+     * 0 0 0 64 1 1                 #bg, r g b x_off y_off
+     * 127 0 0 255 0 0              #fg, r g b x_off y_off
+     */
+
+
+  /* cheatin way to load defaults into the many style structs */
+  int a[ STYLE_CNT ][12]={
+        /* bg r,g,b,a     fg r,g,b,a                   enum name    */
+        {0,0,0,64 ,1,1,   127,0,    0,255,0,0} ,      /* STYLE_MENU */
+        {0,0,0,255,1,1,   255,255,255,255,0,0} ,      /* STYLE_CAPTION */
+        {0,0,0,255,1,1,   255,255,255,255,0,0} ,      /* STYLE_WHITE */
+        {0,0,0,255,1,1,   255,0,    0,255,0,0} ,      /* STYLE_RED */
+        {0,0,0,255,1,1,   205,205, 50,255,0,0 }  };   /* STYLE_YELLOW */
+
+  int i;
+
+  for (i=0; i<STYLE_CNT  ; i++ ){
+    (*s)[i].bg.r     = a[i][0];
+    (*s)[i].bg.g     = a[i][1];
+    (*s)[i].bg.b     = a[i][2];
+    (*s)[i].bg.a     = a[i][3];
+    (*s)[i].bg.x_off = a[i][4];
+    (*s)[i].bg.y_off = a[i][5];
+
+    (*s)[i].fg.r     = a[i][6];
+    (*s)[i].fg.g     = a[i][7];
+    (*s)[i].fg.b     = a[i][8];
+    (*s)[i].fg.a     = a[i][9];
+    (*s)[i].fg.x_off = a[i][10];
+    (*s)[i].fg.y_off = a[i][11];
+
+  }
+
+  return;
+
+}     /* end of init_all_styles() */
+
 
 void init_parse_options(int argc, char **argv)
 {
+
 	/* TODO: sort these to match declaration of __fehoptions */
 
 	/* For setting the command hint on X windows */
@@ -60,6 +113,10 @@ void init_parse_options(int argc, char **argv)
 	opt.menu_font = estrdup(DEFAULT_MENU_FONT);
 	opt.font = NULL;
 	opt.menu_bg = estrdup(PREFIX "/share/feh/images/menubg_default.png");
+	opt.menu_style = estrdup(PREFIX "/share/feh/fonts/menu.style");
+  opt.write_filelist = 1;       /* write filelist on exit? Yes=1 */
+
+  init_all_styles( &opt.style );
 
 	opt.start_list_at = NULL;
 	opt.jump_on_resort = 1;
@@ -81,22 +138,22 @@ void init_parse_options(int argc, char **argv)
 
 	/* If we have a filelist to read, do it now */
 	if (opt.filelistfile) {
-		/* joining two reverse-sorted lists in this manner works nicely for us
-		   here, as files specified on the commandline end up at the *end* of
-		   the combined filelist, in the specified order. */
+		/* tack the contents of the filelistfile to the end of our exisiting
+     * feh_md list in correct order.  No need to reverse them now.
+		 */
 		D(("About to load filelist from file\n"));
-		filelist = gib_list_cat(filelist, feh_read_filelist(opt.filelistfile));
+		feh_read_filelist( feh_md , opt.filelistfile );
 	}
 
 	D(("Options parsed\n"));
 
-	filelist_len = gib_list_length(filelist);
-	if (!filelist_len)
+	if ( FEH_LL_LEN(feh_md) == 0 )
 		show_mini_usage();
 
 	check_options();
 
-	feh_prepare_filelist();
+	feh_prepare_filelist( feh_md );
+
 	return;
 }
 
@@ -374,6 +431,7 @@ static void feh_parse_option_array(int argc, char **argv, int finalrun)
 		{"bg-tile"       , 0, 0, 200},
 		{"bg-center"     , 0, 0, 201},
 		{"bg-scale"      , 0, 0, 202},
+		{"menu-style"    , 1, 0, 204},
 		{"zoom"          , 1, 0, 205},
 		{"no-screen-clip", 0, 0, 206},
 		{"index-info"    , 1, 0, 207},
@@ -394,6 +452,7 @@ static void feh_parse_option_array(int argc, char **argv, int finalrun)
 		{"info"          , 1, 0, 234},
 		{"force-aliasing", 0, 0, 235},
 		{"no-fehbg"      , 0, 0, 236},
+		{"nowrite-filelist" , 0, 0, 237},
 
 		{0, 0, 0, 0}
 	};
@@ -627,6 +686,11 @@ static void feh_parse_option_array(int argc, char **argv, int finalrun)
 		case 219:
 			opt.bgmode = BG_MODE_MAX;
 			break;
+		case 204:
+			free(opt.menu_style);
+			opt.menu_style = estrdup(optarg);
+			weprintf("The --menu-style option is deprecated and will be removed by 2012");
+			break;
 		case 205:
 			if (!strcmp("fill", optarg))
 				opt.zoom_mode = ZOOM_MODE_FILL;
@@ -713,6 +777,9 @@ static void feh_parse_option_array(int argc, char **argv, int finalrun)
 		case 236:
 			opt.no_fehbg = 1;
 			break;
+		case 237:
+			opt.write_filelist = 0;
+			break;
 		default:
 			break;
 		}
@@ -722,7 +789,8 @@ static void feh_parse_option_array(int argc, char **argv, int finalrun)
 	if (optind < argc) {
 		while (optind < argc) {
 			if (opt.reload)
-				original_file_items = gib_list_add_front(original_file_items, estrdup(argv[optind]));
+				feh_ll_add_end( ofi_md, estrdup(argv[optind]));
+
 			/* If recursive is NOT set, but the only argument is a directory
 			   name, we grab all the files in there, but not subdirs */
 			add_file_to_filelist_recursively(argv[optind++], FILELIST_FIRST);
