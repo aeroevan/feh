@@ -616,7 +616,7 @@ void init_list_mode(void)
 	for ( l = feh_md->rn->next ; l != feh_md->rn ; l = l->next) {
 		file = FEH_FILE(l->data);
 		if (opt.customlist)
-			printf("%s\n", feh_printf(opt.customlist, file));
+			printf("%s\n", feh_printf(opt.customlist, file, NULL));
 		else {
 			printf("%d\t%s\t%d\t%d\t%s",
           ++j,
