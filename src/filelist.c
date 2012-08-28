@@ -507,6 +507,7 @@ void feh_read_filelist( LLMD *md , char *filename) {
 	char s[1024], s1[1024];
 	/* Imlib_Image tmp_im;      removed May 2012 */
 	struct stat st;
+	signed short tmp_magick_timeout;
 
 	if (!filename)
 		return;
@@ -514,6 +515,8 @@ void feh_read_filelist( LLMD *md , char *filename) {
 	/*
 	 * feh_load_image will fail horribly if filename is not seekable
 	 */
+	tmp_magick_timeout = opt.magick_timeout;
+	opt.magick_timeout = -1;
   /* && feh_load_image_char(&tmp_im, filename)) ;;; code replaced May 2012 */
 	if (!stat(filename, &st)
         && S_ISREG(st.st_mode)
@@ -524,6 +527,7 @@ void feh_read_filelist( LLMD *md , char *filename) {
 		opt.filelistfile = NULL;
 		return;
 	}
+	opt.magick_timeout = tmp_magick_timeout;
 
 	errno = 0;
 	if ((fp = fopen(filename, "r")) == NULL) {
