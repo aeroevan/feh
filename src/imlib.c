@@ -239,10 +239,7 @@ int feh_load_image(Imlib_Image * im, feh_file * file)
 		tmpname = feh_magick_load_image(file->filename);
 	}
 
-	if (image_source != SRC_IMLIB) {
-		if (tmpname == NULL)
-			return 0;
-
+	if ((image_source != SRC_IMLIB) && tmpname) {
 		*im = imlib_load_image_with_error_return(tmpname, &err);
 		if (im) {
 			real_filename = file->filename;
@@ -264,7 +261,7 @@ int feh_load_image(Imlib_Image * im, feh_file * file)
 			fputs("\n", stdout);
 			reset_output = 1;
 		}
-		feh_imlib_print_load_error(file->filename, NULL, err)
+		feh_imlib_print_load_error(file->filename, NULL, err);
 		D(("Load *failed*\n"));
 		return(0);
 	}
@@ -339,9 +336,6 @@ static char *feh_magick_load_image(char *filename)
 			if (!opt.quiet) {
 				if (WIFSIGNALED(status))
 					weprintf("%s - Conversion took too long, skipping",
-						filename);
-				else
-					weprintf("%s - No loader for that file format",
 						filename);
 			}
 
@@ -1131,6 +1125,7 @@ void feh_edit_inplace_lossless(winwidget w, int op)
 	int len = strlen(filename) + 1;
 	char *file_str = emalloc(len);
 	int pid, status;
+	int devnull = -1;
 	char op_name[]  = "rotate";     /* message */
 	char op_op[]    = "-rotate";    /* jpegtran option */
 	char op_value[] = "horizontal"; /* jpegtran option's value */
@@ -1150,14 +1145,16 @@ void feh_edit_inplace_lossless(winwidget w, int op)
 	if ((pid = fork()) < 0) {
 		im_weprintf(w, "lossless %s: fork failed:", op_name);
 		exit(1);
-	} else if (pid == 0) {
+	}
+	else if (pid == 0) {
 
 		execlp("jpegtran", "jpegtran", "-copy", "all", op_op, op_value,
 				"-outfile", file_str, file_str, NULL);
 
 		im_weprintf(w, "lossless %s: Is 'jpegtran' installed? Failed to exec:", op_name);
 		exit(1);
-	} else {
+	}
+	else {
 		waitpid(pid, &status, 0);
 
 		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
@@ -1168,6 +1165,30 @@ void feh_edit_inplace_lossless(winwidget w, int op)
 					op_name, status >> 8, op_op, op_value, file_str, file_str);
 			free(file_str);
 			return;
+		}
+	}
+	if ((pid = fork()) < 0) {
+		im_weprintf(w, "lossless %s: cannot fix rotation: fork:", op_name);
+		exit(1);
+	}
+	else if (pid == 0) {
+
+		/* discard normal output */
+		devnull = open("/dev/null", O_WRONLY);
+		dup2(devnull, 1);
+
+		execlp("jpegexiforient", "jpegexiforient", "-1", file_str, NULL);
+		im_weprintf(w, "lossless %s: Failed to exec jpegexiforient:", op_name);
+		exit(1);
+	}
+	else {
+		waitpid(pid, &status, 0);
+
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			im_weprintf(w,
+					"lossless %s: Failed to update EXIF orientation tag:"
+					" jpegexiforient returned %d",
+					op_name, status >> 8);
 		}
 	}
 	free(file_str);
